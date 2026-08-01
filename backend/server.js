@@ -22,6 +22,7 @@ const surveyRoutes = require('./routes/surveys');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
 const adminRoutes = require('./routes/admin');
+const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
@@ -43,8 +44,12 @@ app.use('/api/withdrawal', withdrawalRoutes);
 // Toutes les routes admin exigent un token valide + le custom claim admin
 app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
 
+// ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
+// À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
+// que ton compte a bien les droits admin confirmés.
+app.use('/api/bootstrap-admin', bootstrapAdminRoute);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
-                
