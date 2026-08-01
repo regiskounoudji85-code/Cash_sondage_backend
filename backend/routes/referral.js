@@ -14,6 +14,9 @@ const { verifyToken } = require('../middleware/auth');
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "Profil non synchronisé. Réessaie de te reconnecter." });
+    }
     const { referralCode, referralCount, referralBonusEarned } = userDoc.data();
 
     const referralsSnap = await db.collection('referrals')
@@ -36,3 +39,4 @@ router.get('/me', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+      
