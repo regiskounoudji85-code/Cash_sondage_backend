@@ -84,25 +84,30 @@ router.get('/history', verifyToken, async (req, res) => {
 // (prénom + initiale). Remplace les fausses notifications : ça donne
 // la même dynamique de preuve sociale mais sans rien inventer.
 router.get('/recent-public', async (req, res) => {
-  const snap = await db.collection('withdrawals')
-    .where('status', '==', 'paid')
-    .orderBy('processedAt', 'desc')
-    .limit(20)
-    .get();
+  try {
+    const snap = await db.collection('withdrawals')
+      .where('status', '==', 'paid')
+      .orderBy('processedAt', 'desc')
+      .limit(20)
+      .get();
 
-  const items = await Promise.all(snap.docs.map(async (d) => {
-    const w = d.data();
-    const userDoc = await db.collection('users').doc(w.userId).get();
-    const name = userDoc.exists ? userDoc.data().displayName : 'Utilisateur';
-    return {
-      displayName: anonymize(name),
-      country: userDoc.exists ? userDoc.data().country : null,
-      amountFcfa: w.amountFcfa,
-      processedAt: w.processedAt,
-    };
-  }));
+    const items = await Promise.all(snap.docs.map(async (d) => {
+      const w = d.data();
+      const userDoc = await db.collection('users').doc(w.userId).get();
+      const name = userDoc.exists ? userDoc.data().displayName : 'Utilisateur';
+      return {
+        displayName: anonymize(name),
+        country: userDoc.exists ? userDoc.data().country : null,
+        amountFcfa: w.amountFcfa,
+        processedAt: w.processedAt,
+      };
+    }));
 
-  res.json({ items });
+    res.json({ items });
+  } catch (err) {
+    console.error('Erreur /withdrawal/recent-public :', err.message);
+    res.status(200).json({ items: [] }); // on renvoie une liste vide plutôt que de planter
+  }
 });
 
 function anonymize(name) {
@@ -112,3 +117,4 @@ function anonymize(name) {
 }
 
 module.exports = router;
+        
