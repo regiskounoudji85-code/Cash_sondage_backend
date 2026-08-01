@@ -13,7 +13,7 @@ const { applyPointsChange } = require('../utils/points');
 router.get('/', verifyToken, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
-    const userCountry = userDoc.data().country;
+    const userCountry = userDoc.exists ? userDoc.data().country : null;
 
     let query = db.collection('surveys')
       .where('status', '==', 'active')
