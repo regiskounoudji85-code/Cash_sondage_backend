@@ -5,6 +5,15 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+// Filet de sécurité : une erreur non prévue ne doit plus jamais arrêter
+// tout le serveur. On la journalise et on continue à tourner.
+process.on('unhandledRejection', (err) => {
+  console.error('⚠️ Erreur non gérée (le serveur continue de tourner) :', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Exception non interceptée (le serveur continue de tourner) :', err);
+});
+
 const { verifyToken } = require('./middleware/auth');
 const { requireAdmin } = require('./middleware/adminAuth');
 
@@ -13,9 +22,9 @@ const surveyRoutes = require('./routes/surveys');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
 const adminRoutes = require('./routes/admin');
+const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
-app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
@@ -34,7 +43,13 @@ app.use('/api/withdrawal', withdrawalRoutes);
 // Toutes les routes admin exigent un token valide + le custom claim admin
 app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
 
+// ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
+// À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
+// que ton compte a bien les droits admin confirmés.
+app.use('/api/bootstrap-admin', bootstrapAdminRoute);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
+  
