@@ -22,7 +22,6 @@ const surveyRoutes = require('./routes/surveys');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
 const adminRoutes = require('./routes/admin');
-const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
 app.use(helmet());
@@ -46,7 +45,6 @@ app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
 // ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
 // À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
 // que ton compte a bien les droits admin confirmés.
-app.use('/api/bootstrap-admin', bootstrapAdminRoute);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
