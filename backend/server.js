@@ -21,6 +21,7 @@ const authRoutes = require('./routes/auth');
 const surveyRoutes = require('./routes/surveys');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
+const missionRoutes = require('./routes/missions');
 const adminRoutes = require('./routes/admin');
 const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
@@ -40,6 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
+app.use('/api/missions', missionRoutes);
 
 // Toutes les routes admin exigent un token valide + le custom claim admin
 app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
