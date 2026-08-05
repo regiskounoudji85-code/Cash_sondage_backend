@@ -29,8 +29,20 @@ router.post('/sync', verifyToken, async (req, res) => {
     const userDoc = await userRef.get();
 
     if (userDoc.exists) {
-      // Utilisateur déjà connu, on retourne juste son profil
-      return res.json({ user: userDoc.data() });
+      // Utilisateur déjà connu : on complète son profil si le nom ou le
+      // téléphone manquent encore (comptes créés avant l'ajout de ces
+      // champs obligatoires), sans jamais écraser des valeurs déjà en place.
+      const existing = userDoc.data();
+      const updates = {};
+      if (!existing.phone && phone) updates.phone = phone;
+      if ((!existing.displayName || existing.displayName === 'Utilisateur') && displayName) {
+        updates.displayName = displayName;
+      }
+      if (Object.keys(updates).length > 0) {
+        await userRef.update(updates);
+        return res.json({ user: { ...existing, ...updates } });
+      }
+      return res.json({ user: existing });
     }
 
     // Nouvel utilisateur : on valide le code de parrainage s'il y en a un
@@ -53,7 +65,8 @@ router.post('/sync', verifyToken, async (req, res) => {
       phone: phone || null,
       momoNumber: momoNumber || null,
       displayName: displayName || 'Utilisateur',
-      points: 0,
+      surveyPoints: 0,
+      bonusPoints: 0,
       totalEarned: 0,
       vipLevel: 'bronze',
       referralCode: generateReferralCode(),
@@ -98,9 +111,30 @@ router.post('/sync', verifyToken, async (req, res) => {
 
 // GET /api/auth/me
 router.get('/me', verifyToken, async (req, res) => {
-  const userDoc = await db.collection('users').doc(req.user.uid).get();
+  const userRef = db.collection('users').doc(req.user.uid);
+  const userDoc = await userRef.get();
   if (!userDoc.exists) return res.status(404).json({ error: 'Profil introuvable' });
-  res.json({ user: userDoc.data() });
+
+  const data = userDoc.data();
+
+  // Suivi du streak de connexion (jours consécutifs), mis à jour au
+  // maximum une fois par jour civil — sert de base à la mission
+  // "connecte-toi N jours d'affilée".
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const lastKey = data.lastCheckinDay || null;
+
+  if (lastKey !== todayKey) {
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+    const yesterdayKey = yesterday.toISOString().slice(0, 10);
+    const newStreak = lastKey === yesterdayKey ? (data.loginStreak || 0) + 1 : 1;
+    await userRef.update({ loginStreak: newStreak, lastCheckinDay: todayKey });
+    data.loginStreak = newStreak;
+    data.lastCheckinDay = todayKey;
+  }
+
+  res.json({ user: data });
 });
 
 module.exports = router;
+
