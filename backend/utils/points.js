@@ -5,19 +5,31 @@
 
 const { db, admin } = require('../config/firebase');
 
+// routes/mission_bucket_map — quel "compartiment" de points chaque type
+// de transaction alimente. Le solde des SONDAGES reste strictement
+// réservé aux sondages ; missions et parrainage vivent dans un solde
+// bonus séparé, avec son propre seuil de retrait.
+const SURVEY_TYPES = new Set(['survey_reward', 'admin_adjustment_survey']);
+
+function bucketFor(type) {
+  return SURVEY_TYPES.has(type) ? 'surveyPoints' : 'bonusPoints';
+}
+
 /**
- * Crédite ou débite des points à un utilisateur et enregistre la
- * transaction correspondante. Utilise une transaction Firestore pour
- * éviter les conditions de course (deux requêtes simultanées).
+ * Crédite ou débite des points à un utilisateur, dans le bon
+ * compartiment (surveyPoints ou bonusPoints selon le type), et
+ * enregistre la transaction correspondante. Utilise une transaction
+ * Firestore pour éviter les conditions de course.
  */
 async function applyPointsChange(userId, delta, type, refId = null) {
   const userRef = db.collection('users').doc(userId);
+  const field = bucketFor(type);
 
   const newBalance = await db.runTransaction(async (t) => {
     const userDoc = await t.get(userRef);
     if (!userDoc.exists) throw new Error('Utilisateur introuvable');
 
-    const currentPoints = userDoc.data().points || 0;
+    const currentPoints = userDoc.data()[field] || 0;
     const updatedPoints = currentPoints + delta;
 
     if (updatedPoints < 0) {
@@ -25,14 +37,15 @@ async function applyPointsChange(userId, delta, type, refId = null) {
     }
 
     t.update(userRef, {
-      points: updatedPoints,
-      ...(delta > 0 ? { totalEarned: admin.firestore.FieldValue.increment(delta) } : {}),
+      [field]: updatedPoints,
+      ...(field === 'surveyPoints' && delta > 0 ? { totalEarned: admin.firestore.FieldValue.increment(delta) } : {}),
     });
 
     const txRef = db.collection('transactions').doc();
     t.set(txRef, {
       userId,
       type,
+      bucket: field,
       points: delta,
       balanceAfter: updatedPoints,
       refId,
@@ -69,3 +82,4 @@ async function updateVipLevel(userId) {
 }
 
 module.exports = { applyPointsChange, updateVipLevel };
+      
