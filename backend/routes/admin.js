@@ -110,7 +110,11 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Ce retrait a déjà été traité' });
     }
 
-    await applyPointsChange(w.userId, w.pointsDeducted, 'admin_adjustment', ref.id);
+    // Le type de transaction distingue le compartiment à recréditer :
+    // un retrait "survey" rejeté doit revenir dans surveyPoints, un
+    // retrait "bonus" rejeté doit revenir dans bonusPoints.
+    const refundType = w.source === 'bonus' ? 'admin_adjustment_bonus' : 'admin_adjustment_survey';
+    await applyPointsChange(w.userId, w.pointsDeducted, refundType, ref.id);
 
     await ref.update({
       status: 'rejected',
@@ -155,3 +159,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
+            
