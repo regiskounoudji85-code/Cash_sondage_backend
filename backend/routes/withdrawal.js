@@ -5,11 +5,16 @@ const { db, admin } = require('../config/firebase');
 const { verifyToken } = require('../middleware/auth');
 
 // POST /api/withdrawal/request
-// Body: { method: "momo_mtn"|"momo_moov"|"paypal", destinationAccount }
+// Body: { source: "survey"|"bonus", method: "momo_mtn"|"momo_moov"|"paypal", destinationAccount }
+// "survey" = solde des sondages complétés (seuil 14 000 FCFA par défaut)
+// "bonus"  = solde missions + parrainage, séparé (seuil 15 000 FCFA par défaut)
 router.post('/request', verifyToken, async (req, res) => {
   const userId = req.user.uid;
-  const { method, destinationAccount } = req.body;
+  const { method, destinationAccount, source } = req.body;
 
+  if (!['survey', 'bonus'].includes(source)) {
+    return res.status(400).json({ error: 'Source de retrait invalide (survey ou bonus)' });
+  }
   if (!['momo_mtn', 'momo_moov', 'paypal'].includes(method)) {
     return res.status(400).json({ error: 'Méthode de retrait invalide' });
   }
@@ -19,39 +24,45 @@ router.post('/request', verifyToken, async (req, res) => {
 
   try {
     const configDoc = await db.collection('config').doc('app').get();
-    const { withdrawalThresholdFcfa, pointToFcfaRate } = configDoc.data();
+    const cfg = configDoc.data() || {};
+    const pointToFcfaRate = cfg.pointToFcfaRate;
+    // Seuils séparés — valeurs par défaut si pas encore réglées dans Firestore.
+    const threshold = source === 'survey'
+      ? (cfg.withdrawalThresholdSurveyFcfa ?? 14000)
+      : (cfg.withdrawalThresholdBonusFcfa ?? 15000);
+    const field = source === 'survey' ? 'surveyPoints' : 'bonusPoints';
 
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
-    const points = userDoc.data().points || 0;
+    const points = userDoc.data()[field] || 0;
     const balanceFcfa = points * pointToFcfaRate;
 
-    // SEULE condition de retrait : avoir atteint le seuil de points.
-    // Pas de condition de parrainage.
-    if (balanceFcfa < withdrawalThresholdFcfa) {
+    if (balanceFcfa < threshold) {
       return res.status(400).json({
-        error: `Seuil de retrait non atteint (${balanceFcfa}/${withdrawalThresholdFcfa} FCFA)`,
+        error: `Seuil de retrait non atteint (${balanceFcfa}/${threshold} FCFA)`,
       });
     }
 
-    // Vérifie qu'il n'y a pas déjà une demande en attente
+    // Vérifie qu'il n'y a pas déjà une demande en attente SUR CETTE SOURCE
+    // (les deux compartiments peuvent avoir chacun une demande en cours).
     const pendingSnap = await db.collection('withdrawals')
       .where('userId', '==', userId)
       .where('status', '==', 'pending')
+      .where('source', '==', source)
       .limit(1)
       .get();
     if (!pendingSnap.empty) {
-      return res.status(400).json({ error: 'Une demande de retrait est déjà en attente' });
+      return res.status(400).json({ error: 'Une demande de retrait est déjà en attente pour ce solde' });
     }
 
-    // On réserve les points immédiatement (évite qu'il les dépense
-    // ailleurs pendant que la demande est en attente de validation)
+    // On réserve les points immédiatement, dans le bon compartiment.
     await userRef.update({
-      points: admin.firestore.FieldValue.increment(-points),
+      [field]: admin.firestore.FieldValue.increment(-points),
     });
 
     const withdrawalRef = await db.collection('withdrawals').add({
       userId,
+      source,
       amountFcfa: balanceFcfa,
       pointsDeducted: points,
       method,
@@ -117,4 +128,4 @@ function anonymize(name) {
 }
 
 module.exports = router;
-        
+      
