@@ -136,5 +136,19 @@ router.get('/me', verifyToken, async (req, res) => {
   res.json({ user: data });
 });
 
-module.exports = router;
+// PATCH /api/auth/profile — modifier son nom/téléphone depuis les Paramètres,
+// à tout moment (contrairement à /sync qui ne complète qu'une seule fois
+// les comptes créés avant l'ajout de ces champs obligatoires).
+router.patch('/profile', verifyToken, async (req, res) => {
+  const { displayName, phone } = req.body;
+  if (!displayName || !phone) {
+    return res.status(400).json({ error: 'Le nom et le téléphone sont obligatoires.' });
+  }
+  const userRef = db.collection('users').doc(req.user.uid);
+  await userRef.update({ displayName, phone });
+  const updated = await userRef.get();
+  res.json({ user: updated.data() });
+});
 
+module.exports = router;
+  
