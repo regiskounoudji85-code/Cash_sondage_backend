@@ -9,7 +9,7 @@ const { db, admin } = require('../config/firebase');
 // de transaction alimente. Le solde des SONDAGES reste strictement
 // réservé aux sondages ; missions et parrainage vivent dans un solde
 // bonus séparé, avec son propre seuil de retrait.
-const SURVEY_TYPES = new Set(['survey_reward', 'admin_adjustment_survey']);
+const SURVEY_TYPES = new Set(['survey_reward', 'admin_adjustment_survey', 'withdrawal_survey']);
 
 function bucketFor(type) {
   return SURVEY_TYPES.has(type) ? 'surveyPoints' : 'bonusPoints';
