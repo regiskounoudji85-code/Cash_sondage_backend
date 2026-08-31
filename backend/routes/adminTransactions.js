@@ -1,38 +1,55 @@
 // routes/adminTransactions.js
 //
-// Endpoint :
+// Endpoint (monté sous /api/admin, protégé par verifyToken + requireAdmin
+// au niveau de server.js) :
 //   GET /api/admin/transactions?limit=50&userId=xxx
 //
-// Collection Firestore : "transactions"
-// { userId, type: 'credit'|'debit', description, amount, balanceBefore,
-//   balanceAfter, createdAt }
+// Collection Firestore : "transactions" — déjà alimentée automatiquement
+// par utils/points.js à CHAQUE mouvement de points (sondage complété,
+// mission réclamée, bonus de parrainage, retrait demandé, remboursement
+// admin suite à un retrait rejeté). Il n'y a donc RIEN à ajouter ailleurs
+// dans le code : cette route se contente de LIRE ce registre existant.
 //
-// ⚠️ Cette route ne fait que LIRE. Il faut que le reste de ton backend
-// écrive déjà un document dans "transactions" à chaque mouvement de points :
-//   - récompense de sondage complété
-//   - bonus de parrainage
-//   - code promo utilisé
-//   - retrait approuvé (montant négatif)
-//   - correction manuelle d'un admin
-// Si ce n'est pas encore fait, ajoute un helper `logTransaction(...)` appelé
-// à chacun de ces endroits dans ton code existant.
+// Champs réels du document : { userId, type, bucket, points, balanceAfter,
+// refId, createdAt }. "bucket" vaut 'surveyPoints' ou 'bonusPoints' selon
+// le compartiment concerné. "type" est la clé technique (ex:
+// 'survey_reward', 'mission_reward', 'referral_bonus', 'withdrawal_survey',
+// 'withdrawal_bonus', 'admin_adjustment_survey', 'admin_adjustment_bonus').
 
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
-const verifyAdminAuth = require('../middleware/verifyAdminAuth');
+const { db } = require('../config/firebase');
 
-const db = admin.firestore();
+// Traduit la clé technique en libellé lisible pour l'affichage admin.
+const TYPE_LABELS = {
+  survey_reward: 'Récompense de sondage',
+  mission_reward: 'Récompense de mission',
+  referral_bonus: 'Bonus de parrainage',
+  withdrawal_survey: 'Retrait (solde sondages)',
+  withdrawal_bonus: 'Retrait (solde bonus)',
+  admin_adjustment_survey: 'Remboursement admin (sondages)',
+  admin_adjustment_bonus: 'Remboursement admin (bonus)',
+};
 
-router.get('/transactions', verifyAdminAuth, async (req, res) => {
+router.get('/transactions', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     let query = db.collection('transactions').orderBy('createdAt', 'desc').limit(limit);
     if (req.query.userId) {
-      query = db.collection('transactions').where('userId', '==', req.query.userId).orderBy('createdAt', 'desc').limit(limit);
+      query = db.collection('transactions')
+        .where('userId', '==', req.query.userId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
     }
     const snap = await query.get();
-    const transactions = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const transactions = snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        description: TYPE_LABELS[data.type] || data.type,
+      };
+    });
     res.json({ transactions });
   } catch (err) {
     console.error(err);
@@ -41,27 +58,4 @@ router.get('/transactions', verifyAdminAuth, async (req, res) => {
 });
 
 module.exports = router;
-
-// ---------- Helper à réutiliser depuis tes routes existantes ----------
-// Exemple d'usage dans ta route d'approbation de retrait :
-//
-//   const { logTransaction } = require('./routes/adminTransactions');
-//   await logTransaction({ userId, type: 'debit', description: 'Retrait Mobile Money', amount: -amountFcfa });
-//
-module.exports.logTransaction = async function logTransaction({ userId, type, description, amount }) {
-  const userRef = db.collection('users').doc(userId);
-  await db.runTransaction(async (tx) => {
-    const userDoc = await tx.get(userRef);
-    const balanceBefore = (userDoc.data() && userDoc.data().points) || 0;
-    const balanceAfter = balanceBefore + amount;
-    tx.set(db.collection('transactions').doc(), {
-      userId,
-      type,
-      description,
-      amount,
-      balanceBefore,
-      balanceAfter,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  });
-};
+  
