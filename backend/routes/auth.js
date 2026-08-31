@@ -92,14 +92,31 @@ router.post('/sync', verifyToken, async (req, res) => {
         .get();
       const parrainId = parrainSnap.docs[0].id;
 
-      await db.collection('referrals').add({
-        referrerId: parrainId,
-        referredId: uid,
-        bonusPoints: 500,
-        status: 'pending',
-        confirmedAt: null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // Montant configurable depuis le Dashboard Admin (settings/referral),
+      // avec une valeur par défaut si jamais réglée.
+      const referralConfigDoc = await db.collection('settings').doc('referral').get();
+      const referralConfig = referralConfigDoc.exists ? referralConfigDoc.data() : {};
+      const referrerRewardPoints = referralConfig.referrerRewardPoints ?? 500;
+      const maxReferrals = referralConfig.maxReferrals; // null/undefined = illimité
+
+      let withinLimit = true;
+      if (maxReferrals !== null && maxReferrals !== undefined) {
+        const parrainDoc = parrainSnap.docs[0];
+        withinLimit = (parrainDoc.data().referralCount || 0) < maxReferrals;
+      }
+
+      if (withinLimit) {
+        await db.collection('referrals').add({
+          referrerId: parrainId,
+          referredId: uid,
+          bonusPoints: referrerRewardPoints,
+          status: 'pending',
+          confirmedAt: null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      // Si la limite est atteinte, le compte est quand même créé
+      // normalement — seul le bonus de parrainage n'est pas généré.
     }
 
     res.json({ user: newUser });
@@ -151,4 +168,4 @@ router.patch('/profile', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-  
+           
