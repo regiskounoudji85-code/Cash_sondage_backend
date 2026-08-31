@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../config/firebase');
 const { verifyToken } = require('../middleware/auth');
+const { applyPointsChange } = require('../utils/points');
 
 // POST /api/withdrawal/request
 // Body: { source: "survey"|"bonus", method: "momo_mtn"|"momo_moov"|"paypal", destinationAccount }
@@ -55,10 +56,10 @@ router.post('/request', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Une demande de retrait est déjà en attente pour ce solde' });
     }
 
-    // On réserve les points immédiatement, dans le bon compartiment.
-    await userRef.update({
-      [field]: admin.firestore.FieldValue.increment(-points),
-    });
+    // On réserve les points immédiatement, dans le bon compartiment —
+    // via applyPointsChange pour que ça apparaisse dans le registre des
+    // transactions (utilisé par le Dashboard Admin).
+    await applyPointsChange(userId, -points, source === 'survey' ? 'withdrawal_survey' : 'withdrawal_bonus', null);
 
     const withdrawalRef = await db.collection('withdrawals').add({
       userId,
@@ -128,4 +129,4 @@ function anonymize(name) {
 }
 
 module.exports = router;
-      
+                                            
