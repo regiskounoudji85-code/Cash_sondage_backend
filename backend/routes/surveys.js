@@ -108,7 +108,9 @@ router.post('/:surveyId/complete', verifyToken, async (req, res) => {
 });
 
 // Débloque le bonus du parrain une fois que le filleul a fait sa
-// première action réelle sur l'app (évite les faux comptes).
+// première action réelle sur l'app (évite les faux comptes). Le filleul
+// lui-même peut aussi recevoir un petit bonus, montant configurable
+// depuis le Dashboard Admin (settings/referral → refereeRewardPoints).
 async function confirmReferralBonus(referredId) {
   const referralSnap = await db.collection('referrals')
     .where('referredId', '==', referredId)
@@ -123,6 +125,12 @@ async function confirmReferralBonus(referredId) {
 
   await applyPointsChange(referral.referrerId, referral.bonusPoints, 'referral_bonus', referralDoc.id);
 
+  const referralConfigDoc = await db.collection('settings').doc('referral').get();
+  const refereeRewardPoints = referralConfigDoc.exists ? (referralConfigDoc.data().refereeRewardPoints ?? 0) : 0;
+  if (refereeRewardPoints > 0) {
+    await applyPointsChange(referredId, refereeRewardPoints, 'referral_bonus', referralDoc.id);
+  }
+
   await referralDoc.ref.update({
     status: 'confirmed',
     confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -135,3 +143,4 @@ async function confirmReferralBonus(referredId) {
 }
 
 module.exports = router;
+           
