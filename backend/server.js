@@ -23,6 +23,10 @@ const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
 const missionRoutes = require('./routes/missions');
 const adminRoutes = require('./routes/admin');
+const adminMissionsRoutes = require('./routes/adminMissions');
+const adminTransactionsRoutes = require('./routes/adminTransactions');
+const adminSettingsRoutes = require('./routes/adminSettings');
+const adminReferralsRoutes = require('./routes/adminReferrals');
 const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
@@ -45,6 +49,10 @@ app.use('/api/missions', missionRoutes);
 
 // Toutes les routes admin exigent un token valide + le custom claim admin
 app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminMissionsRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminTransactionsRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminSettingsRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminReferralsRoutes);
 
 // ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
 // À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
@@ -55,3 +63,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
+  
