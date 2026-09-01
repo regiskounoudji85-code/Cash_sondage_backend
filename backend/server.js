@@ -27,6 +27,11 @@ const adminMissionsRoutes = require('./routes/adminMissions');
 const adminTransactionsRoutes = require('./routes/adminTransactions');
 const adminSettingsRoutes = require('./routes/adminSettings');
 const adminReferralsRoutes = require('./routes/adminReferrals');
+const adminCategoriesRoutes = require('./routes/adminCategories');
+const adminQuestionsRoutes = require('./routes/adminQuestions');
+const { adminRouter: adminPromoCodesRoutes, publicRouter: promoCodesPublicRoutes } = require('./routes/adminPromoCodes');
+const adminNotificationsRoutes = require('./routes/adminNotifications');
+const notificationsRoutes = require('./routes/notifications');
 const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
@@ -53,6 +58,14 @@ app.use('/api/admin', verifyToken, requireAdmin, adminMissionsRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminTransactionsRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminSettingsRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminReferralsRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminCategoriesRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminQuestionsRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminPromoCodesRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminNotificationsRoutes);
+
+// Routes publiques utilisateur (authentification normale, pas admin)
+app.use('/api', promoCodesPublicRoutes);
+app.use('/api', notificationsRoutes);
 
 // ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
 // À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
@@ -63,4 +76,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
-  
