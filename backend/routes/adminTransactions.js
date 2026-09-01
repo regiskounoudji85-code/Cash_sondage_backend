@@ -25,6 +25,7 @@ const TYPE_LABELS = {
   survey_reward: 'Récompense de sondage',
   mission_reward: 'Récompense de mission',
   referral_bonus: 'Bonus de parrainage',
+  promo_code_redeemed: 'Code promo utilisé',
   withdrawal_survey: 'Retrait (solde sondages)',
   withdrawal_bonus: 'Retrait (solde bonus)',
   admin_adjustment_survey: 'Remboursement admin (sondages)',
