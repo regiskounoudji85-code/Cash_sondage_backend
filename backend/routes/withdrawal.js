@@ -26,7 +26,11 @@ router.post('/request', verifyToken, async (req, res) => {
   try {
     const configDoc = await db.collection('config').doc('app').get();
     const cfg = configDoc.data() || {};
-    const pointToFcfaRate = cfg.pointToFcfaRate;
+    // 1 point = 1 FCFA par défaut, comme partout ailleurs dans l'app
+    // (missions, parrainage, soldes affichés). Sans cette valeur par
+    // défaut, un champ non configuré rendait le calcul NaN et
+    // contournait silencieusement la vérification de seuil.
+    const pointToFcfaRate = cfg.pointToFcfaRate ?? 1;
     // Seuils séparés — valeurs par défaut si pas encore réglées dans Firestore.
     const threshold = source === 'survey'
       ? (cfg.withdrawalThresholdSurveyFcfa ?? 14000)
@@ -129,4 +133,4 @@ function anonymize(name) {
 }
 
 module.exports = router;
-                                            
+  
