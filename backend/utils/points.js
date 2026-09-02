@@ -1,4 +1,4 @@
-// utils/points.js
+  // utils/points.js
 // Toute modification de points passe par ici, JAMAIS directement
 // depuis une route. Ça garantit un ledger cohérent (collection
 // "transactions") et un seul endroit à auditer en cas de litige.
@@ -65,7 +65,12 @@ async function applyPointsChange(userId, delta, type, refId = null) {
  */
 async function updateVipLevel(userId) {
   const configDoc = await db.collection('config').doc('app').get();
-  const thresholds = configDoc.data().vipThresholds;
+  // Sans ce filet, un document config/app absent ou incomplet faisait
+  // planter CETTE fonction — donc silencieusement TOUT appel à
+  // applyPointsChange (sondage complété, mission réclamée, bonus de
+  // parrainage...), même si les points eux-mêmes étaient bien crédités.
+  const cfg = configDoc.exists ? configDoc.data() : {};
+  const thresholds = cfg.vipThresholds || { argent: 5000, or: 20000, platine: 50000 };
 
   const userRef = db.collection('users').doc(userId);
   const userDoc = await userRef.get();
@@ -82,4 +87,4 @@ async function updateVipLevel(userId) {
 }
 
 module.exports = { applyPointsChange, updateVipLevel };
-      
+    
