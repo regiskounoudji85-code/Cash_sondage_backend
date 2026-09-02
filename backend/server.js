@@ -32,7 +32,6 @@ const adminQuestionsRoutes = require('./routes/adminQuestions');
 const { adminRouter: adminPromoCodesRoutes, publicRouter: promoCodesPublicRoutes } = require('./routes/adminPromoCodes');
 const adminNotificationsRoutes = require('./routes/adminNotifications');
 const notificationsRoutes = require('./routes/notifications');
-const bootstrapAdminRoute = require('./routes/bootstrapAdmin'); // ⚠️ TEMPORAIRE — à retirer après usage
 
 const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
@@ -67,12 +66,8 @@ app.use('/api/admin', verifyToken, requireAdmin, adminNotificationsRoutes);
 app.use('/api', promoCodesPublicRoutes);
 app.use('/api', notificationsRoutes);
 
-// ⚠️ Route TEMPORAIRE pour accorder les droits admin sans terminal.
-// À SUPPRIMER (cette ligne + le fichier routes/bootstrapAdmin.js) une fois
-// que ton compte a bien les droits admin confirmés.
-app.use('/api/bootstrap-admin', bootstrapAdminRoute);
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
+           
