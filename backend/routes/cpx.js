@@ -23,9 +23,27 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { db } = require('../config/firebase');
+const { verifyToken } = require('../middleware/auth');
 const { applyPointsChange } = require('../utils/points');
 
 const CPX_SECURE_KEY = process.env.CPX_SECURE_KEY;
+// Trouvé dans le dashboard CPX → Apps → ton app → onglet INFO.
+// Variable d'environnement sur Railway ; 37063 vu dans ton test comme repli.
+const CPX_APP_ID = process.env.CPX_APP_ID || '37063';
+
+// GET /api/cpx/iframe-url — utilisateur connecté uniquement.
+// Calcule le secure_hash CÔTÉ SERVEUR (jamais côté navigateur, sinon
+// n'importe qui pourrait lire ta clé secrète dans le code source de la
+// page et forger des hash pour d'autres utilisateurs).
+router.get('/iframe-url', verifyToken, async (req, res) => {
+  if (!CPX_SECURE_KEY) {
+    return res.status(500).json({ error: 'CPX_SECURE_KEY manquante côté serveur' });
+  }
+  const userId = req.user.uid;
+  const secureHash = crypto.createHash('md5').update(`${userId}-${CPX_SECURE_KEY}`).digest('hex');
+  const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${CPX_APP_ID}&ext_user_id=${encodeURIComponent(userId)}&secure_hash=${secureHash}&subid_1=&subid_2=`;
+  res.json({ iframeUrl });
+});
 
 router.get('/postback', async (req, res) => {
   try {
@@ -100,3 +118,4 @@ router.get('/postback', async (req, res) => {
 });
 
 module.exports = router;
+  
