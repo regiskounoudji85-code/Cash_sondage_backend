@@ -32,13 +32,13 @@ const adminQuestionsRoutes = require('./routes/adminQuestions');
 const { adminRouter: adminPromoCodesRoutes, publicRouter: promoCodesPublicRoutes } = require('./routes/adminPromoCodes');
 const adminNotificationsRoutes = require('./routes/adminNotifications');
 const notificationsRoutes = require('./routes/notifications');
-
+const cpxRoutes = require('./routes/cpx');
 const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
-
+app.use('/api/cpx', cpxRoutes);
 // Limite générale anti-abus (ajuster selon le trafic réel)
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 app.use(limiter);
