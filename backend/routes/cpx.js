@@ -31,6 +31,15 @@ const CPX_SECURE_KEY = process.env.CPX_SECURE_KEY;
 // Variable d'environnement sur Railway ; 37063 vu dans ton test comme repli.
 const CPX_APP_ID = process.env.CPX_APP_ID || '37063';
 
+// Part du montant CPX reversée à l'utilisateur. "amount_local" représente
+// déjà 100% de ce que CPX te paie pour ce sondage (voir leurs CGU : le
+// montant crédité est calculé directement sur ce qui t'a été payé) — donc
+// appliquer ce taux ici revient exactement à "si je gagne 1$, l'utilisateur
+// reçoit 0.1$", quelle que soit la devise dans laquelle CPX exprime le
+// montant. Modifiable via une variable d'environnement Railway
+// (CPX_REVENUE_SHARE), sans toucher au code, si tu veux ajuster plus tard.
+const CPX_REVENUE_SHARE = parseFloat(process.env.CPX_REVENUE_SHARE || '0.1');
+
 // GET /api/cpx/iframe-url — utilisateur connecté uniquement.
 // Calcule le secure_hash CÔTÉ SERVEUR (jamais côté navigateur, sinon
 // n'importe qui pourrait lire ta clé secrète dans le code source de la
@@ -75,14 +84,16 @@ router.get('/postback', async (req, res) => {
       if (txDoc.exists) {
         return res.send('1'); // déjà traité, on confirme simplement
       }
-      const points = Math.round(parseFloat(amount_local) || 0);
+      const fullAmount = parseFloat(amount_local) || 0;
+      const points = Math.round(fullAmount * CPX_REVENUE_SHARE);
       if (points <= 0) {
         return res.send('1');
       }
       await applyPointsChange(user_id, points, 'survey_reward', trans_id);
       await txRef.set({
         userId: user_id,
-        points,
+        fullAmount, // montant brut envoyé par CPX, gardé pour audit
+        points, // montant réellement crédité après partage des revenus
         status: 'credited',
         createdAt: new Date(),
       });
