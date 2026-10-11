@@ -1,4 +1,4 @@
-  // utils/points.js
+// utils/points.js
 // Toute modification de points passe par ici, JAMAIS directement
 // depuis une route. Ça garantit un ledger cohérent (collection
 // "transactions") et un seul endroit à auditer en cas de litige.
@@ -38,7 +38,13 @@ async function applyPointsChange(userId, delta, type, refId = null) {
 
     t.update(userRef, {
       [field]: updatedPoints,
-      ...(field === 'surveyPoints' && delta > 0 ? { totalEarned: admin.firestore.FieldValue.increment(delta) } : {}),
+      // totalEarned suit TOUS les gains (sondages + missions + parrainage
+      // + codes promo) — c'est ce qui détermine le niveau VIP, donc un
+      // utilisateur actif sur les missions/le parrainage doit progresser
+      // au même titre que quelqu'un qui ne fait que des sondages.
+      // Jamais sur un delta négatif (retrait, chargeback), pour ne pas
+      // rétrograder quelqu'un qui vient de retirer ses gains.
+      ...(delta > 0 ? { totalEarned: admin.firestore.FieldValue.increment(delta) } : {}),
     });
 
     const txRef = db.collection('transactions').doc();
@@ -55,7 +61,7 @@ async function applyPointsChange(userId, delta, type, refId = null) {
     return updatedPoints;
   });
 
-  await updateVipLevel(userId, newBalance);
+  await updateVipLevel(userId);
   return newBalance;
 }
 
@@ -87,4 +93,3 @@ async function updateVipLevel(userId) {
 }
 
 module.exports = { applyPointsChange, updateVipLevel };
-    
