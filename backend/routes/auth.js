@@ -65,6 +65,7 @@ router.post('/sync', verifyToken, async (req, res) => {
       phone: phone || null,
       momoNumber: momoNumber || null,
       displayName: displayName || 'Utilisateur',
+      gender: null, // 'm' ou 'f', renseigné plus tard depuis Paramètres (optionnel)
       surveyPoints: 0,
       bonusPoints: 0,
       totalEarned: 0,
@@ -153,19 +154,26 @@ router.get('/me', verifyToken, async (req, res) => {
   res.json({ user: data });
 });
 
-// PATCH /api/auth/profile — modifier son nom/téléphone depuis les Paramètres,
-// à tout moment (contrairement à /sync qui ne complète qu'une seule fois
-// les comptes créés avant l'ajout de ces champs obligatoires).
+// PATCH /api/auth/profile — modifier son nom/téléphone/genre depuis les
+// Paramètres, à tout moment (contrairement à /sync qui ne complète
+// qu'une seule fois les comptes créés avant l'ajout de ces champs
+// obligatoires). Le genre est optionnel et sert uniquement à mieux
+// faire correspondre les sondages CPX Research au profil utilisateur.
 router.patch('/profile', verifyToken, async (req, res) => {
-  const { displayName, phone } = req.body;
+  const { displayName, phone, gender } = req.body;
   if (!displayName || !phone) {
     return res.status(400).json({ error: 'Le nom et le téléphone sont obligatoires.' });
   }
+  const updates = { displayName, phone };
+  if (gender === 'm' || gender === 'f') {
+    updates.gender = gender;
+  } else if (gender === '') {
+    updates.gender = null; // "Préfère ne pas dire"
+  }
   const userRef = db.collection('users').doc(req.user.uid);
-  await userRef.update({ displayName, phone });
+  await userRef.update(updates);
   const updated = await userRef.get();
   res.json({ user: updated.data() });
 });
 
 module.exports = router;
-           
