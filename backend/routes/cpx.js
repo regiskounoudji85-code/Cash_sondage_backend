@@ -44,13 +44,29 @@ const CPX_REVENUE_SHARE = parseFloat(process.env.CPX_REVENUE_SHARE || '0.1');
 // Calcule le secure_hash CÔTÉ SERVEUR (jamais côté navigateur, sinon
 // n'importe qui pourrait lire ta clé secrète dans le code source de la
 // page et forger des hash pour d'autres utilisateurs).
+//
+// On ajoute aussi username/email/gender quand on les a : CPX recommande
+// username+email pour mieux repérer les doublons, et gender pour mieux
+// faire correspondre les sondages au profil — ça peut aider à réduire
+// le "Nous n'avons trouvé aucun sondage pour votre profil".
 router.get('/iframe-url', verifyToken, async (req, res) => {
   if (!CPX_SECURE_KEY) {
     return res.status(500).json({ error: 'CPX_SECURE_KEY manquante côté serveur' });
   }
   const userId = req.user.uid;
   const secureHash = crypto.createHash('md5').update(`${userId}-${CPX_SECURE_KEY}`).digest('hex');
-  const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${CPX_APP_ID}&ext_user_id=${encodeURIComponent(userId)}&secure_hash=${secureHash}&subid_1=&subid_2=`;
+
+  const userDoc = await db.collection('users').doc(userId).get();
+  const userData = userDoc.exists ? userDoc.data() : {};
+  const username = userData.displayName || '';
+  const email = req.user.email || userData.email || '';
+  const gender = userData.gender === 'f' || userData.gender === 'm' ? userData.gender : '';
+
+  let iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${CPX_APP_ID}&ext_user_id=${encodeURIComponent(userId)}&secure_hash=${secureHash}&subid_1=&subid_2=`;
+  if (username) iframeUrl += `&username=${encodeURIComponent(username)}`;
+  if (email) iframeUrl += `&email=${encodeURIComponent(email)}`;
+  if (gender) iframeUrl += `&gender=${gender}`;
+
   res.json({ iframeUrl });
 });
 
