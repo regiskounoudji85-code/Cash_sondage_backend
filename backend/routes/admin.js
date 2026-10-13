@@ -12,26 +12,65 @@ const { applyPointsChange } = require('../utils/points');
 router.post('/surveys', async (req, res) => {
   try {
     const {
-      title, sponsor, sponsorLogo, description,
+      title, sponsor, sponsorLogo, introDescription,
       pointsReward, durationMinutes, targetCriteria,
-      maxResponses, expiresAt,
+      maxResponses, expiresAt, questions, featured,
     } = req.body;
 
+    if (!title || !sponsor) {
+      return res.status(400).json({ error: 'Le titre et l\'annonceur sont obligatoires.' });
+    }
+
+    // Bug corrigé : new Date(expiresAt) sur une valeur vide/mal formée
+    // produit un "Invalid Date", qui faisait planter Firestore au moment
+    // de l'écriture avec "Invalid time value". On valide AVANT d'écrire.
+    let expiresAtDate = null;
+    if (expiresAt) {
+      const parsed = new Date(expiresAt);
+      if (isNaN(parsed.getTime())) {
+        return res.status(400).json({ error: 'Date d\'expiration invalide.' });
+      }
+      expiresAtDate = parsed;
+    }
+
+    // Valide la structure des questions avant d'écrire quoi que ce soit —
+    // mieux vaut un rejet propre à la création qu'un sondage à moitié
+    // utilisable découvert plus tard par un utilisateur.
+    let cleanQuestions = [];
+    if (Array.isArray(questions)) {
+      cleanQuestions = questions.map((q, i) => {
+        if (!q.text || !Array.isArray(q.options) || q.options.length < 2) {
+          throw new Error(`Question ${i + 1} invalide : un texte et au moins 2 options sont requis.`);
+        }
+        return {
+          id: q.id || `q${i + 1}`,
+          text: q.text,
+          // Seul "single_choice" est géré pour l'instant côté webapp ;
+          // la structure accepte déjà "multiple_choice" pour plus tard.
+          type: q.type === 'multiple_choice' ? 'multiple_choice' : 'single_choice',
+          options: q.options,
+        };
+      });
+    }
+
     const surveyRef = await db.collection('surveys').add({
-      title, sponsor, sponsorLogo: sponsorLogo || null, description,
+      title, sponsor, sponsorLogo: sponsorLogo || null,
+      introDescription: introDescription || '',
+      questions: cleanQuestions,
+      featured: !!featured,
       pointsReward, durationMinutes,
       targetCriteria: targetCriteria || {},
       status: 'active',
       maxResponses, currentResponses: 0,
       createdBy: req.user.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: new Date(expiresAt),
+      expiresAt: expiresAtDate,
     });
 
     res.json({ success: true, surveyId: surveyRef.id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erreur lors de la création du sondage' });
+    res.status(400).json({ error: err.message || 'Erreur lors de la création du sondage' });
   }
 });
 
@@ -110,9 +149,6 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Ce retrait a déjà été traité' });
     }
 
-    // Le type de transaction distingue le compartiment à recréditer :
-    // un retrait "survey" rejeté doit revenir dans surveyPoints, un
-    // retrait "bonus" rejeté doit revenir dans bonusPoints.
     const refundType = w.source === 'bonus' ? 'admin_adjustment_bonus' : 'admin_adjustment_survey';
     await applyPointsChange(w.userId, w.pointsDeducted, refundType, ref.id);
 
@@ -159,4 +195,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-            
+                               
