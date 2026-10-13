@@ -37,10 +37,13 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// POST /api/surveys/:surveyId/complete
-router.post('/:surveyId/complete', verifyToken, async (req, res) => {
+// POST /api/surveys/:surveyId/responses
+// Remplace l'ancienne route /complete : valide désormais une réponse
+// par question (quand le sondage en a), avant de créditer les points.
+router.post('/:surveyId/responses', verifyToken, async (req, res) => {
   const { surveyId } = req.params;
   const userId = req.user.uid;
+  const { answers } = req.body; // { [questionId]: indexOptionChoisie }
 
   try {
     const surveyRef = db.collection('surveys').doc(surveyId);
@@ -53,6 +56,22 @@ router.post('/:surveyId/complete', verifyToken, async (req, res) => {
     }
     if (survey.currentResponses >= survey.maxResponses) {
       return res.status(400).json({ error: 'Quota de réponses atteint' });
+    }
+
+    // Exige une réponse à CHAQUE question du sondage (quand il en a) —
+    // filet de sécurité côté serveur, en plus du bouton désactivé côté
+    // webapp tant que toutes les questions n'ont pas de réponse.
+    const questions = survey.questions || [];
+    if (questions.length > 0) {
+      if (!answers || typeof answers !== 'object') {
+        return res.status(400).json({ error: 'Réponses manquantes' });
+      }
+      for (const q of questions) {
+        const given = answers[q.id];
+        if (given === undefined || given === null || given === '') {
+          return res.status(400).json({ error: `Réponse manquante pour : ${q.text}` });
+        }
+      }
     }
 
     // Anti-fraude basique : empêcher une double réponse au même sondage
@@ -74,6 +93,7 @@ router.post('/:surveyId/complete', verifyToken, async (req, res) => {
     await db.collection('surveyResponses').add({
       userId,
       surveyId,
+      answers: answers || {},
       pointsAwarded: survey.pointsReward,
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
       ipHash,
@@ -143,4 +163,4 @@ async function confirmReferralBonus(referredId) {
 }
 
 module.exports = router;
-           
+      
