@@ -84,6 +84,59 @@ router.patch('/surveys/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/surveys/:id — retire le sondage de la liste des
+// sondages disponibles. Les réponses déjà soumises et les points déjà
+// crédités aux utilisateurs restent intacts (collection surveyResponses
+// et transactions non touchées) — supprimer un sondage n'annule jamais
+// rétroactivement ce qui a déjà été gagné.
+router.delete('/surveys/:id', async (req, res) => {
+  try {
+    const ref = db.collection('surveys').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Sondage introuvable' });
+    await ref.delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur lors de la suppression du sondage' });
+  }
+});
+
+// GET /api/admin/surveys/:id/responses/summary — répartition des
+// réponses par question/option, pour voir ce que les utilisateurs ont
+// réellement répondu sans avoir à fouiller Firestore à la main.
+router.get('/surveys/:id/responses/summary', async (req, res) => {
+  try {
+    const surveyDoc = await db.collection('surveys').doc(req.params.id).get();
+    if (!surveyDoc.exists) return res.status(404).json({ error: 'Sondage introuvable' });
+    const survey = surveyDoc.data();
+
+    const responsesSnap = await db.collection('surveyResponses')
+      .where('surveyId', '==', req.params.id)
+      .get();
+    const responses = responsesSnap.docs.map((d) => d.data());
+
+    const questions = survey.questions || [];
+    const summary = questions.map((q) => {
+      const counts = q.options.map(() => 0);
+      responses.forEach((r) => {
+        const answerIdx = parseInt(r.answers?.[q.id], 10);
+        if (!isNaN(answerIdx) && counts[answerIdx] !== undefined) counts[answerIdx]++;
+      });
+      return {
+        questionId: q.id,
+        text: q.text,
+        options: q.options.map((opt, i) => ({ text: opt, count: counts[i] })),
+      };
+    });
+
+    res.json({ totalResponses: responses.length, summary });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur lors du chargement des réponses' });
+  }
+});
+
 // ---------- UTILISATEURS ----------
 
 // GET /api/admin/users?limit=50&cursor=xxx
@@ -195,4 +248,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-                               
+  
