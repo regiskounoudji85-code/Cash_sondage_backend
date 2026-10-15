@@ -39,16 +39,24 @@ router.post('/surveys', async (req, res) => {
     let cleanQuestions = [];
     if (Array.isArray(questions)) {
       cleanQuestions = questions.map((q, i) => {
-        if (!q.text || !Array.isArray(q.options) || q.options.length < 2) {
-          throw new Error(`Question ${i + 1} invalide : un texte et au moins 2 options sont requis.`);
+        if (!q.text) {
+          throw new Error(`Question ${i + 1} invalide : un texte est requis.`);
         }
+        // "text" = réponse libre écrite par l'utilisateur, pas d'options.
+        // Les autres types (choix) exigent au moins 2 options.
+        const type = q.type === 'text' ? 'text'
+          : q.type === 'multiple_choice' ? 'multiple_choice'
+          : 'single_choice';
+
+        if (type !== 'text' && (!Array.isArray(q.options) || q.options.length < 2)) {
+          throw new Error(`Question ${i + 1} invalide : au moins 2 options sont requises pour une question à choix.`);
+        }
+
         return {
           id: q.id || `q${i + 1}`,
           text: q.text,
-          // Seul "single_choice" est géré pour l'instant côté webapp ;
-          // la structure accepte déjà "multiple_choice" pour plus tard.
-          type: q.type === 'multiple_choice' ? 'multiple_choice' : 'single_choice',
-          options: q.options,
+          type,
+          options: type === 'text' ? [] : q.options,
         };
       });
     }
@@ -118,6 +126,15 @@ router.get('/surveys/:id/responses/summary', async (req, res) => {
 
     const questions = survey.questions || [];
     const summary = questions.map((q) => {
+      if (q.type === 'text') {
+        // Question texte libre : pas de comptage possible, on renvoie
+        // directement les réponses écrites par les utilisateurs.
+        const textAnswers = responses
+          .map((r) => r.answers?.[q.id])
+          .filter((a) => a && String(a).trim() !== '');
+        return { questionId: q.id, text: q.text, type: 'text', textAnswers };
+      }
+
       const counts = q.options.map(() => 0);
       responses.forEach((r) => {
         const answerIdx = parseInt(r.answers?.[q.id], 10);
@@ -126,6 +143,7 @@ router.get('/surveys/:id/responses/summary', async (req, res) => {
       return {
         questionId: q.id,
         text: q.text,
+        type: 'single_choice',
         options: q.options.map((opt, i) => ({ text: opt, count: counts[i] })),
       };
     });
