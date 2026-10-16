@@ -21,6 +21,23 @@ router.post('/surveys', async (req, res) => {
       return res.status(400).json({ error: 'Le titre et l\'annonceur sont obligatoires.' });
     }
 
+    // pointsReward/durationMinutes/maxResponses manquants ou vides
+    // arrivent ici comme NaN (venant d'un parseInt('') côté dashboard).
+    // Sans ce filet, le sondage était créé quand même avec un champ NaN
+    // en base — et `currentResponses(0) < NaN` étant TOUJOURS faux, ce
+    // sondage disparaissait silencieusement de /api/surveys partout
+    // (webapp ET tableau du Dashboard Admin), alors même que Firestore
+    // et /admin/stats le comptaient bien comme "actif".
+    if (!Number.isFinite(pointsReward) || pointsReward <= 0) {
+      return res.status(400).json({ error: 'Les points offerts doivent être un nombre valide supérieur à 0.' });
+    }
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      return res.status(400).json({ error: 'La durée doit être un nombre valide supérieur à 0.' });
+    }
+    if (!Number.isFinite(maxResponses) || maxResponses <= 0) {
+      return res.status(400).json({ error: 'Le nombre maximal de réponses doit être un nombre valide supérieur à 0.' });
+    }
+
     // Bug corrigé : new Date(expiresAt) sur une valeur vide/mal formée
     // produit un "Invalid Date", qui faisait planter Firestore au moment
     // de l'écriture avec "Invalid time value". On valide AVANT d'écrire.
@@ -266,4 +283,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-  
+      
