@@ -9,6 +9,22 @@ const { applyPointsChange } = require('../utils/points');
 // ---------- SONDAGES ----------
 
 // POST /api/admin/surveys — créer un sondage (côté annonceur/admin)
+// GET /api/admin/surveys — tous les sondages, sans aucun filtrage,
+// contrairement à GET /api/surveys (public) qui exclut volontairement
+// tout sondage en pause, au quota atteint ou expiré — logique pour un
+// utilisateur, mais ça rendait ces sondages invisibles même pour
+// l'admin, qui doit toujours pouvoir les retrouver pour les gérer.
+router.get('/surveys', async (req, res) => {
+  try {
+    const snap = await db.collection('surveys').orderBy('createdAt', 'desc').limit(100).get();
+    const surveys = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    res.json({ surveys });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur lors du chargement des sondages' });
+  }
+});
+
 router.post('/surveys', async (req, res) => {
   try {
     const {
@@ -283,4 +299,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-      
+           
