@@ -15,6 +15,15 @@ router.get('/', verifyToken, async (req, res) => {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const userCountry = userDoc.exists ? userDoc.data().country : null;
 
+    // Sondages déjà répondus par CET utilisateur — la route /responses
+    // empêchait déjà de créditer deux fois les mêmes points, mais rien
+    // ne retirait le sondage de la liste, qui restait donc visible et
+    // cliquable comme s'il pouvait être repris indéfiniment.
+    const answeredSnap = await db.collection('surveyResponses')
+      .where('userId', '==', req.user.uid)
+      .get();
+    const answeredSurveyIds = new Set(answeredSnap.docs.map((d) => d.data().surveyId));
+
     let query = db.collection('surveys')
       .where('status', '==', 'active')
       .orderBy('createdAt', 'desc')
@@ -23,6 +32,7 @@ router.get('/', verifyToken, async (req, res) => {
     const snap = await query.get();
     const surveys = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((s) => !answeredSurveyIds.has(s.id))
       .filter((s) => {
         const countries = s.targetCriteria?.countries;
         if (!countries || countries.length === 0) return true;
@@ -163,4 +173,4 @@ async function confirmReferralBonus(referredId) {
 }
 
 module.exports = router;
-      
+  
