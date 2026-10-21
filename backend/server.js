@@ -33,6 +33,8 @@ const { adminRouter: adminPromoCodesRoutes, publicRouter: promoCodesPublicRoutes
 const adminNotificationsRoutes = require('./routes/adminNotifications');
 const notificationsRoutes = require('./routes/notifications');
 const cpxRoutes = require('./routes/cpx');
+const advertiserRoutes = require('./routes/advertiser');
+const adminAdvertisersRoutes = require('./routes/adminAdvertisers');
 const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
 app.use(helmet());
@@ -61,7 +63,8 @@ app.use('/api/admin', verifyToken, requireAdmin, adminCategoriesRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminQuestionsRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminPromoCodesRoutes);
 app.use('/api/admin', verifyToken, requireAdmin, adminNotificationsRoutes);
-
+app.use('/api/advertiser', advertiserRoutes);
+app.use('/api/admin', verifyToken, requireAdmin, adminAdvertisersRoutes);
 // Routes publiques utilisateur (authentification normale, pas admin)
 app.use('/api', promoCodesPublicRoutes);
 app.use('/api', notificationsRoutes);
