@@ -113,6 +113,23 @@ router.post('/:surveyId/responses', verifyToken, async (req, res) => {
       currentResponses: admin.firestore.FieldValue.increment(1),
     });
 
+    // Sondage créé depuis l'Espace Annonceurs : dès que le quota de
+    // réponses souhaité par l'annonceur est atteint, sa demande passe
+    // automatiquement à "completed" — c'est ce qui débloque ses
+    // résultats côté suivi public (routes/advertiser.js).
+    if (survey.linkedAdvertiserRequestId) {
+      const newResponseCount = (survey.currentResponses || 0) + 1;
+      const requestRef = db.collection('advertiserRequests').doc(survey.linkedAdvertiserRequestId);
+      const requestDoc = await requestRef.get();
+      if (
+        requestDoc.exists &&
+        requestDoc.data().status !== 'completed' &&
+        newResponseCount >= (requestDoc.data().desiredResponses || Infinity)
+      ) {
+        await requestRef.update({ status: 'completed' });
+      }
+    }
+
     const newBalance = await applyPointsChange(
       userId,
       survey.pointsReward,
@@ -173,4 +190,3 @@ async function confirmReferralBonus(referredId) {
 }
 
 module.exports = router;
-  
