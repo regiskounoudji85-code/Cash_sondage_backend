@@ -31,6 +31,7 @@ router.post('/surveys', async (req, res) => {
       title, sponsor, sponsorLogo, introDescription,
       pointsReward, durationMinutes, targetCriteria,
       maxResponses, expiresAt, questions, featured,
+      linkedAdvertiserRequestId,
     } = req.body;
 
     if (!title || !sponsor) {
@@ -103,10 +104,21 @@ router.post('/surveys', async (req, res) => {
       targetCriteria: targetCriteria || {},
       status: 'active',
       maxResponses, currentResponses: 0,
+      linkedAdvertiserRequestId: linkedAdvertiserRequestId || null,
       createdBy: req.user.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: expiresAtDate,
     });
+
+    // Sondage créé depuis une demande annonceur : on boucle la demande
+    // pour qu'elle passe de "paid" à "published" et pointe vers le vrai
+    // sondage — c'est ce que l'Espace Annonceurs affiche à la personne.
+    if (linkedAdvertiserRequestId) {
+      await db.collection('advertiserRequests').doc(linkedAdvertiserRequestId).update({
+        linkedSurveyId: surveyRef.id,
+        status: 'published',
+      });
+    }
 
     res.json({ success: true, surveyId: surveyRef.id });
   } catch (err) {
@@ -299,4 +311,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-           
+                                     
