@@ -8,28 +8,35 @@ const admin = require('firebase-admin');
 require('dotenv').config();
 
 if (!admin.apps.length) {
-  // FIREBASE_PRIVATE_KEY doit contenir la clé avec de VRAIS retours à
-  // la ligne (pas des "\n" littéraux) — c'est ce que Railway permet de
-  // coller directement dans l'éditeur de variable. On ne fait PLUS de
-  // conversion ici : un .replace(/\\n/g, '\n') sur une valeur qui a
-  // déjà de vrais retours à la ligne ne fait rien de mal en soi, mais
-  // le risque venait du copier-coller qui altérait le format attendu.
-  // On garde quand même un filet : si jamais la valeur contient encore
-  // des "\n" littéraux (ancien format), on les convertit aussi — cette
-  // version accepte les DEUX formats sans planter.
-  const rawKey = process.env.FIREBASE_PRIVATE_KEY || '';
-  const privateKey = rawKey.includes('\\n') ? rawKey.replace(/\\n/g, '\n') : rawKey;
+  let credential;
 
-  admin.initializeApp({
-    credential: admin.credential.cert({
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    // Méthode recommandée : coller le fichier JSON de la clé de
+    // service TEL QUEL dans une seule variable. JSON.parse() gère
+    // nativement l'échappement des \n dans le champ private_key —
+    // plus aucune extraction/conversion manuelle, donc plus aucun
+    // risque de guillemets oubliés, de tirets corrompus par un
+    // éditeur "intelligent", etc.
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    credential = admin.credential.cert(serviceAccount);
+  } else {
+    // Ancienne méthode (3 variables séparées), conservée en repli
+    // pour compatibilité — accepte les deux formats de private_key
+    // ("\n" littéraux ou vrais retours à la ligne).
+    const rawKey = process.env.FIREBASE_PRIVATE_KEY || '';
+    const privateKey = rawKey.includes('\\n') ? rawKey.replace(/\\n/g, '\n') : rawKey;
+    credential = admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey,
-    }),
-  });
+    });
+  }
+
+  admin.initializeApp({ credential });
 }
 
 const db = admin.firestore();
 const auth = admin.auth();
 
 module.exports = { admin, db, auth };
+  
