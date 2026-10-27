@@ -17,9 +17,10 @@ router.get('/advertiser-requests', async (req, res) => {
 });
 
 // POST /api/admin/advertiser-requests/:id/validate-payment
-// L'admin confirme manuellement avoir reçu l'argent — même logique que
-// pour les retraits utilisateurs — utile si le paiement a été fait hors
-// ligne ou si l'étape de paiement en ligne n'a pas abouti correctement.
+// SEUL chemin qui fasse passer une demande à "paid" — l'admin confirme
+// avoir RÉELLEMENT reçu l'argent sur son propre numéro, après l'avoir
+// vérifié lui-même (relevé MoMo, SMS de confirmation...). Même logique
+// que pour les retraits utilisateurs, dans l'autre sens.
 router.post('/advertiser-requests/:id/validate-payment', async (req, res) => {
   try {
     const ref = db.collection('advertiserRequests').doc(req.params.id);
@@ -56,6 +57,7 @@ router.get('/settings/advertiser-pricing', async (req, res) => {
     res.json({
       individualPriceFcfa: data.individualPriceFcfa ?? 2000,
       companyPriceFcfa: data.companyPriceFcfa ?? 5000,
+      paymentNumbers: data.paymentNumbers || {},
     });
   } catch (err) {
     console.error(err);
@@ -66,7 +68,7 @@ router.get('/settings/advertiser-pricing', async (req, res) => {
 // PATCH /api/admin/settings/advertiser-pricing
 router.patch('/settings/advertiser-pricing', async (req, res) => {
   try {
-    const { individualPriceFcfa, companyPriceFcfa } = req.body;
+    const { individualPriceFcfa, companyPriceFcfa, paymentNumbers } = req.body;
     if (!Number.isFinite(individualPriceFcfa) || individualPriceFcfa <= 0) {
       return res.status(400).json({ error: 'Le tarif particulier doit être un nombre valide supérieur à 0.' });
     }
@@ -74,7 +76,11 @@ router.patch('/settings/advertiser-pricing', async (req, res) => {
       return res.status(400).json({ error: 'Le tarif entreprise doit être un nombre valide supérieur à 0.' });
     }
     await db.collection('settings').doc('advertiserPricing').set(
-      { individualPriceFcfa, companyPriceFcfa },
+      {
+        individualPriceFcfa,
+        companyPriceFcfa,
+        paymentNumbers: paymentNumbers || {},
+      },
       { merge: true }
     );
     res.json({ success: true });
@@ -85,3 +91,4 @@ router.patch('/settings/advertiser-pricing', async (req, res) => {
 });
 
 module.exports = router;
+  
