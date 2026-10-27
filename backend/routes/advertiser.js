@@ -17,8 +17,9 @@ function generateTrackingCode() {
   return code;
 }
 
-// GET /api/advertiser/pricing — tarifs actuels, publics (affichés avant
-// même que la personne ne commence à remplir le formulaire).
+// GET /api/advertiser/pricing — tarifs ET numéros de réception,
+// publics (affichés avant même que la personne ne commence à remplir
+// le formulaire, et sur l'écran de paiement pour savoir où envoyer).
 router.get('/pricing', async (req, res) => {
   try {
     const doc = await db.collection('settings').doc('advertiserPricing').get();
@@ -26,6 +27,7 @@ router.get('/pricing', async (req, res) => {
     res.json({
       individualPriceFcfa: data.individualPriceFcfa ?? 2000,
       companyPriceFcfa: data.companyPriceFcfa ?? 5000,
+      paymentNumbers: data.paymentNumbers || {},
     });
   } catch (err) {
     console.error(err);
@@ -87,6 +89,8 @@ router.post('/requests', async (req, res) => {
       status: 'pending_payment', // pending_payment → paid → published → completed
       paymentMethod: null,
       paymentReference: null,
+      paymentClaimed: false, // true dès que l'annonceur déclare avoir payé, AVANT toute vérification admin
+      paymentClaimedAt: null,
       linkedSurveyId: null,
       trackingCode,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -101,10 +105,13 @@ router.post('/requests', async (req, res) => {
 });
 
 // POST /api/advertiser/requests/:trackingCode/pay
-// Le code de suivi sert à la fois d'identifiant et de secret léger :
-// sans le connaître, impossible de marquer la demande de quelqu'un
-// d'autre comme payée (même logique de sécurité que pour les autres
-// endpoints sans compte de la plateforme).
+// IMPORTANT : ceci enregistre uniquement ce que l'annonceur DÉCLARE avoir
+// fait — ça ne vérifie jamais qu'un vrai transfert d'argent a eu lieu, et
+// ne doit donc JAMAIS faire passer la demande à "paid" tout seul. Seul
+// l'admin, en confirmant avoir réellement reçu l'argent (voir
+// routes/adminAdvertisers.js → validate-payment), peut faire cette
+// transition — exactement comme pour les retraits utilisateurs, mais
+// dans l'autre sens (argent qui entre, pas qui sort).
 router.post('/requests/:trackingCode/pay', async (req, res) => {
   try {
     const { paymentMethod, paymentReference } = req.body;
@@ -126,8 +133,10 @@ router.post('/requests/:trackingCode/pay', async (req, res) => {
     await doc.ref.update({
       paymentMethod,
       paymentReference,
-      status: 'paid',
-      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentClaimed: true,
+      paymentClaimedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // status reste "pending_payment" : seule la vérification manuelle
+      // de l'admin le fait passer à "paid".
     });
 
     res.json({ success: true });
@@ -160,6 +169,7 @@ router.get('/requests/:trackingCode', async (req, res) => {
 
     res.json({
       status: data.status,
+      paymentClaimed: !!data.paymentClaimed,
       topic: data.topic,
       desiredResponses: data.desiredResponses,
       priceFcfa: data.priceFcfa,
@@ -226,3 +236,4 @@ router.get('/requests/:trackingCode/results', async (req, res) => {
 });
 
 module.exports = router;
+      
