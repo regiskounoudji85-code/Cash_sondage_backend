@@ -9,6 +9,12 @@
 const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../config/firebase');
+const { isOnlinePaymentEnabled } = require('../utils/fedapayConfig');
+
+// Nombre maximal de réponses qu'un "Particulier" peut commander. Au-delà,
+// il doit passer au profil "Entreprise" (tarif plus élevé). Valeur par
+// défaut si l'admin ne l'a pas configurée dans le Dashboard.
+const DEFAULT_INDIVIDUAL_MAX_RESPONSES = 50;
 
 function generateTrackingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1 (ambiguïté)
@@ -27,7 +33,11 @@ router.get('/pricing', async (req, res) => {
     res.json({
       individualPriceFcfa: data.individualPriceFcfa ?? 2000,
       companyPriceFcfa: data.companyPriceFcfa ?? 5000,
+      individualMaxResponses: data.individualMaxResponses ?? DEFAULT_INDIVIDUAL_MAX_RESPONSES,
       paymentNumbers: data.paymentNumbers || {},
+      // Si true, le site propose le paiement en ligne FedaPay ; sinon il
+      // retombe sur le paiement manuel (numéros + déclaration + vérification admin).
+      onlinePaymentEnabled: isOnlinePaymentEnabled(),
     });
   } catch (err) {
     console.error(err);
@@ -63,6 +73,19 @@ router.post('/requests', async (req, res) => {
     // raisonnable si jamais les tarifs n'ont pas encore été configurés.
     const pricingDoc = await db.collection('settings').doc('advertiserPricing').get();
     const pricing = pricingDoc.exists ? pricingDoc.data() : {};
+
+    // Règle Particulier / Entreprise : au-delà d'un certain nombre de
+    // réponses, un sondage relève d'un usage professionnel et doit être
+    // commandé avec le profil Entreprise. Appliqué ICI, côté serveur, et
+    // pas seulement dans le formulaire — sinon il suffirait d'appeler
+    // l'API directement pour contourner la limite.
+    const individualMax = pricing.individualMaxResponses ?? DEFAULT_INDIVIDUAL_MAX_RESPONSES;
+    if (requesterType === 'individual' && desiredResponsesNum > individualMax) {
+      return res.status(400).json({
+        error: `Le profil Particulier est limité à ${individualMax} réponses. Pour un échantillon plus large, choisis le profil Entreprise.`,
+      });
+    }
+
     const priceFcfa = requesterType === 'company'
       ? (pricing.companyPriceFcfa ?? 5000)
       : (pricing.individualPriceFcfa ?? 2000);
@@ -236,4 +259,4 @@ router.get('/requests/:trackingCode/results', async (req, res) => {
 });
 
 module.exports = router;
-      
+           
