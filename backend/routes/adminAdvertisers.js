@@ -57,6 +57,7 @@ router.get('/settings/advertiser-pricing', async (req, res) => {
     res.json({
       individualPriceFcfa: data.individualPriceFcfa ?? 2000,
       companyPriceFcfa: data.companyPriceFcfa ?? 5000,
+      individualMaxResponses: data.individualMaxResponses ?? 50,
       paymentNumbers: data.paymentNumbers || {},
     });
   } catch (err) {
@@ -68,18 +69,25 @@ router.get('/settings/advertiser-pricing', async (req, res) => {
 // PATCH /api/admin/settings/advertiser-pricing
 router.patch('/settings/advertiser-pricing', async (req, res) => {
   try {
-    const { individualPriceFcfa, companyPriceFcfa, paymentNumbers } = req.body;
+    const { individualPriceFcfa, companyPriceFcfa, paymentNumbers, individualMaxResponses } = req.body;
     if (!Number.isFinite(individualPriceFcfa) || individualPriceFcfa <= 0) {
       return res.status(400).json({ error: 'Le tarif particulier doit être un nombre valide supérieur à 0.' });
     }
     if (!Number.isFinite(companyPriceFcfa) || companyPriceFcfa <= 0) {
       return res.status(400).json({ error: 'Le tarif entreprise doit être un nombre valide supérieur à 0.' });
     }
+    if (individualMaxResponses !== undefined &&
+        (!Number.isInteger(individualMaxResponses) || individualMaxResponses <= 0)) {
+      return res.status(400).json({ error: 'La limite de réponses du profil Particulier doit être un entier supérieur à 0.' });
+    }
+
     await db.collection('settings').doc('advertiserPricing').set(
       {
         individualPriceFcfa,
         companyPriceFcfa,
         paymentNumbers: paymentNumbers || {},
+        // Non fournie : on conserve la valeur déjà enregistrée.
+        ...(individualMaxResponses !== undefined ? { individualMaxResponses } : {}),
       },
       { merge: true }
     );
@@ -91,4 +99,4 @@ router.patch('/settings/advertiser-pricing', async (req, res) => {
 });
 
 module.exports = router;
-  
+    
