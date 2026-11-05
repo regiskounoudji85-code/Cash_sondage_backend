@@ -39,6 +39,11 @@ const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
 app.use(helmet());
 app.use(cors());
+const fedapayRoutes = require('./routes/fedapay');
+...
+app.use(cors());
+app.use('/api/fedapay', fedapayRoutes);   // ici, AVANT express.json()
+app.use(express.json());
 app.use(express.json());
 app.use('/api/cpx', cpxRoutes);
 // Limite générale anti-abus (ajuster selon le trafic réel)
