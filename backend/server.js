@@ -35,17 +35,19 @@ const notificationsRoutes = require('./routes/notifications');
 const cpxRoutes = require('./routes/cpx');
 const advertiserRoutes = require('./routes/advertiser');
 const adminAdvertisersRoutes = require('./routes/adminAdvertisers');
+const fedapayRoutes = require('./routes/fedapay');
+
 const app = express();
 app.set('trust proxy', 1); // nécessaire derrière le proxy de Railway
 app.use(helmet());
 app.use(cors());
-const fedapayRoutes = require('./routes/fedapay');
-...
-app.use(cors());
-app.use('/api/fedapay', fedapayRoutes);   // ici, AVANT express.json()
-app.use(express.json());
+
+// FedaPay AVANT express.json() (le webhook peut avoir besoin du corps brut)
+app.use('/api/fedapay', fedapayRoutes);
+
 app.use(express.json());
 app.use('/api/cpx', cpxRoutes);
+
 // Limite générale anti-abus (ajuster selon le trafic réel)
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 app.use(limiter);
@@ -57,19 +59,26 @@ app.use('/api/surveys', surveyRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/missions', missionRoutes);
+app.use('/api/advertiser', advertiserRoutes);
 
 // Toutes les routes admin exigent un token valide + le custom claim admin
-app.use('/api/admin', verifyToken, requireAdmin, adminRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminMissionsRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminTransactionsRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminSettingsRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminReferralsRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminCategoriesRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminQuestionsRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminPromoCodesRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminNotificationsRoutes);
-app.use('/api/advertiser', advertiserRoutes);
-app.use('/api/admin', verifyToken, requireAdmin, adminAdvertisersRoutes);
+// (vérifié une seule fois, puis on passe dans chaque routeur)
+app.use(
+  '/api/admin',
+  verifyToken,
+  requireAdmin,
+  adminRoutes,
+  adminMissionsRoutes,
+  adminTransactionsRoutes,
+  adminSettingsRoutes,
+  adminReferralsRoutes,
+  adminCategoriesRoutes,
+  adminQuestionsRoutes,
+  adminPromoCodesRoutes,
+  adminNotificationsRoutes,
+  adminAdvertisersRoutes
+);
+
 // Routes publiques utilisateur (authentification normale, pas admin)
 app.use('/api', promoCodesPublicRoutes);
 app.use('/api', notificationsRoutes);
@@ -78,4 +87,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur le port ${PORT}`);
 });
-           
