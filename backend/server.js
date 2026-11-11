@@ -56,14 +56,7 @@ const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 app.use(limiter);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-// TEMPORAIRE : à supprimer après diagnostic
-app.get('/debug/fedapay', (req, res) => {
-  res.json({
-    hasSecretKey: !!process.env.FEDAPAY_SECRET_KEY,
-    envValue: process.env.FEDAPAY_ENV || null,
-    allowSandbox: process.env.FEDAPAY_ALLOW_SANDBOX || null,
-  });
-});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/referral', referralRoutes);
