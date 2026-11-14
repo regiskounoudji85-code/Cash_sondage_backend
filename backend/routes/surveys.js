@@ -71,15 +71,30 @@ router.post('/:surveyId/responses', verifyToken, async (req, res) => {
     // Exige une réponse à CHAQUE question du sondage (quand il en a) —
     // filet de sécurité côté serveur, en plus du bouton désactivé côté
     // webapp tant que toutes les questions n'ont pas de réponse.
+    // On reconstruit les réponses à partir des questions du sondage, au
+    // lieu de stocker tel quel ce que le navigateur envoie : sinon
+    // n'importe qui pourrait enregistrer des champs inventés ou un texte
+    // de plusieurs mégaoctets, qui finiraient dans les résultats livrés
+    // à l'annonceur.
     const questions = survey.questions || [];
+    const cleanAnswers = {};
     if (questions.length > 0) {
       if (!answers || typeof answers !== 'object') {
         return res.status(400).json({ error: 'Réponses manquantes' });
       }
       for (const q of questions) {
         const given = answers[q.id];
-        if (given === undefined || given === null || given === '') {
+        if (given === undefined || given === null || String(given).trim() === '') {
           return res.status(400).json({ error: `Réponse manquante pour : ${q.text}` });
+        }
+        if (q.type === 'text') {
+          cleanAnswers[q.id] = String(given).trim().slice(0, 1000);
+        } else {
+          const idx = parseInt(given, 10);
+          if (!Number.isInteger(idx) || idx < 0 || idx >= (q.options || []).length) {
+            return res.status(400).json({ error: `Réponse invalide pour : ${q.text}` });
+          }
+          cleanAnswers[q.id] = String(idx);
         }
       }
     }
@@ -103,7 +118,7 @@ router.post('/:surveyId/responses', verifyToken, async (req, res) => {
     await db.collection('surveyResponses').add({
       userId,
       surveyId,
-      answers: answers || {},
+      answers: cleanAnswers,
       pointsAwarded: survey.pointsReward,
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
       ipHash,
@@ -190,3 +205,4 @@ async function confirmReferralBonus(referredId) {
 }
 
 module.exports = router;
+      
