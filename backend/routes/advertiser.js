@@ -7,6 +7,8 @@
 // le sondage lié depuis le Dashboard Admin (routes/adminAdvertisers.js).
 
 const express = require('express');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { db, admin } = require('../config/firebase');
 const { isOnlinePaymentEnabled } = require('../utils/fedapayConfig');
@@ -16,12 +18,26 @@ const { isOnlinePaymentEnabled } = require('../utils/fedapayConfig');
 // défaut si l'admin ne l'a pas configurée dans le Dashboard.
 const DEFAULT_INDIVIDUAL_MAX_RESPONSES = 50;
 
+// Le code de suivi donne accès au statut ET aux résultats d'un sondage
+// payé : il doit donc être imprévisible. Math.random() ne l'est pas
+// (prévisible en théorie) ; crypto.randomInt est cryptographiquement sûr.
 function generateTrackingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1 (ambiguïté)
   let code = '';
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[crypto.randomInt(chars.length)];
   return code;
 }
+
+// Anti-abus : créer des demandes en masse noierait ton tableau de bord,
+// et deviner des codes de suivi doit rester impraticable.
+const createRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Trop de demandes depuis cette adresse. Réessaie plus tard.' },
+});
+const codeLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessaie dans quelques minutes.' },
+});
 
 // GET /api/advertiser/pricing — tarifs ET numéros de réception,
 // publics (affichés avant même que la personne ne commence à remplir
@@ -46,7 +62,7 @@ router.get('/pricing', async (req, res) => {
 });
 
 // POST /api/advertiser/requests — soumettre une nouvelle demande
-router.post('/requests', async (req, res) => {
+router.post('/requests', createRequestLimiter, async (req, res) => {
   try {
     const {
       contactName, companyName, requesterType,
@@ -135,7 +151,7 @@ router.post('/requests', async (req, res) => {
 // routes/adminAdvertisers.js → validate-payment), peut faire cette
 // transition — exactement comme pour les retraits utilisateurs, mais
 // dans l'autre sens (argent qui entre, pas qui sort).
-router.post('/requests/:trackingCode/pay', async (req, res) => {
+router.post('/requests/:trackingCode/pay', codeLookupLimiter, async (req, res) => {
   try {
     const { paymentMethod, paymentReference } = req.body;
     if (!paymentMethod || !paymentReference) {
@@ -170,7 +186,7 @@ router.post('/requests/:trackingCode/pay', async (req, res) => {
 });
 
 // GET /api/advertiser/requests/:trackingCode — suivi public, par code
-router.get('/requests/:trackingCode', async (req, res) => {
+router.get('/requests/:trackingCode', codeLookupLimiter, async (req, res) => {
   try {
     const snap = await db.collection('advertiserRequests')
       .where('trackingCode', '==', req.params.trackingCode)
@@ -208,7 +224,7 @@ router.get('/requests/:trackingCode', async (req, res) => {
 // GET /api/advertiser/requests/:trackingCode/results — résultats
 // agrégés, uniquement une fois le sondage terminé (quota de réponses
 // atteint — voir la logique ajoutée dans routes/surveys.js).
-router.get('/requests/:trackingCode/results', async (req, res) => {
+router.get('/requests/:trackingCode/results', codeLookupLimiter, async (req, res) => {
   try {
     const snap = await db.collection('advertiserRequests')
       .where('trackingCode', '==', req.params.trackingCode)
@@ -259,4 +275,3 @@ router.get('/requests/:trackingCode/results', async (req, res) => {
 });
 
 module.exports = router;
-           
