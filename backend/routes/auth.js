@@ -10,6 +10,11 @@ const { db, admin } = require('../config/firebase');
 const { verifyToken } = require('../middleware/auth');
 const { applyPointsChange } = require('../utils/points');
 
+// Version des Conditions d'utilisation affichées dans la webapp. À
+// incrémenter quand le texte change, pour savoir quelle version chaque
+// utilisateur a acceptée.
+const TERMS_VERSION = '1.0';
+
 function generateReferralCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1 (ambiguïté)
   let code = '';
@@ -23,7 +28,11 @@ function generateReferralCode() {
 router.post('/sync', verifyToken, async (req, res) => {
   try {
     const { uid, email } = req.user;
-    const { phone, momoNumber, displayName, referralCodeUsed, country } = req.body;
+    const { phone, momoNumber, displayName, referralCodeUsed, country, termsAcceptance } = req.body;
+    // "checkbox" = case cochée à l'inscription ; "notice" = mention affichée
+    // sous les boutons de connexion. On enregistre COMMENT l'acceptation a
+    // été obtenue, sans jamais affirmer plus que ce qui s'est passé.
+    const validAcceptance = ['checkbox', 'notice'].includes(termsAcceptance) ? termsAcceptance : null;
 
     const userRef = db.collection('users').doc(uid);
     const userDoc = await userRef.get();
@@ -37,6 +46,14 @@ router.post('/sync', verifyToken, async (req, res) => {
       if (!existing.phone && phone) updates.phone = phone;
       if ((!existing.displayName || existing.displayName === 'Utilisateur') && displayName) {
         updates.displayName = displayName;
+      }
+      // Course possible à l'inscription : l'appel de synchronisation sans
+      // corps peut créer le profil avant celui qui porte l'acceptation.
+      // On complète donc ici, sans jamais écraser une acceptation existante.
+      if (!existing.termsAcceptedAt && validAcceptance) {
+        updates.termsAcceptedAt = new Date();
+        updates.termsVersion = TERMS_VERSION;
+        updates.termsAcceptance = validAcceptance;
       }
       if (Object.keys(updates).length > 0) {
         await userRef.update(updates);
@@ -66,6 +83,9 @@ router.post('/sync', verifyToken, async (req, res) => {
       momoNumber: momoNumber || null,
       displayName: displayName || 'Utilisateur',
       gender: null, // 'm' ou 'f', renseigné plus tard depuis Paramètres (optionnel)
+      termsAcceptedAt: validAcceptance ? new Date() : null,
+      termsVersion: validAcceptance ? TERMS_VERSION : null,
+      termsAcceptance: validAcceptance,
       surveyPoints: 0,
       bonusPoints: 0,
       totalEarned: 0,
@@ -177,3 +197,4 @@ router.patch('/profile', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+           
