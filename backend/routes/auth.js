@@ -13,7 +13,7 @@ const { applyPointsChange } = require('../utils/points');
 // Version des Conditions d'utilisation affichées dans la webapp. À
 // incrémenter quand le texte change, pour savoir quelle version chaque
 // utilisateur a acceptée.
-const TERMS_VERSION = '1.0';
+const TERMS_VERSION = '1.1';
 
 function generateReferralCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1 (ambiguïté)
@@ -197,4 +197,4 @@ router.patch('/profile', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-           
+            
